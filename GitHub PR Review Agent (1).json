@@ -1,0 +1,720 @@
+{
+  "name": "GitHub PR Review Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "github-pr-review",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "22137e74-fdba-40f1-aee2-a03fb8364cbb",
+      "name": "Webhook",
+      "webhookId": "5b15282a-1072-490e-be5c-5c0681cc3716"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst pr = body?.pull_request || {};\nconst repo = body?.repository || {};\n\nreturn [{\n  json: {\n    pr_number: pr.number,\n    pr_title: pr.title,\n    pr_body: pr.body || \"No description provided\",\n    author: pr.user?.login,\n    repo: repo.full_name,\n    diff_url: pr.diff_url,\n    commits: pr.commits,\n    additions: pr.additions,\n    deletions: pr.deletions,\n    changed_files: pr.changed_files,\n    pr_url: pr.html_url,\n    action: body.action\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "9bdeba98-d240-4ad9-b47f-18343243b4c5",
+      "name": "Extract PR Data"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('Extract PR Data').item.json.repo }}/pulls/{{ $('Extract PR Data').item.json.pr_number }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.diff"
+            },
+            {
+              "name": "Authorization",
+              "value": "token GITHUB_TOKEN"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        416,
+        0
+      ],
+      "id": "b9a1f8bc-4994-493f-bb0a-017298fe794b",
+      "name": "Fetch PR Diff"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_APIKEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ \"model\": \"deepseek/deepseek-chat\", \"messages\": [{ \"role\": \"system\", \"content\": \"You are an expert code reviewer. Analyze the given PR diff and provide structured feedback covering: 1) Bugs or logical errors 2) Security issues 3) Code quality and best practices 4) Specific improvement suggestions. Be concise and actionable.\" }, { \"role\": \"user\", \"content\": \"PR Title: \" + $('Extract PR Data').item.json.pr_title + \"\\nAuthor: \" + $('Extract PR Data').item.json.author + \"\\nCode Diff:\\n\" + $('Fetch PR Diff').item.json.data }] }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        624,
+        0
+      ],
+      "id": "f5ab2e1b-247d-46b6-b6eb-369da1f4561f",
+      "name": "DeepSeek AI Review"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst review_text = response.choices[0].message.content;\nconst pr_number = $('Extract PR Data').item.json.pr_number || \"unknown\";\n\nreturn [{ json: { review: review_text, pr_number: pr_number } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        0
+      ],
+      "id": "4a450d2d-3c90-4e00-86a3-c988e70e4cb3",
+      "name": "Format Review Output"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst choices = input.choices;\nconst review = choices ? choices[0].message.content : input.review;\nconst pr_number = $('Extract PR Data').item.json.pr_number || \"unknown\";\nconst timestamp = new Date().toISOString().replace(/[:.]/g, '-');\nconst filename = `pr_review_${pr_number}_${timestamp}.txt`;\n\nreturn [{ json: { status: \"Review complete\", filename: filename, review: review, review_preview: review ? review.substring(0, 200) : \"\" } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "e500feed-3892-43a8-920a-dec1bcea5afb",
+      "name": "Build Review Summary"
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "stegosaur-hamstring-surface.ngrok-free.dev",
+            "user-agent": "GitHub-Hookshot/17c9cd1",
+            "content-length": "22012",
+            "accept": "*/*",
+            "content-type": "application/json",
+            "x-forwarded-for": "140.82.115.46",
+            "x-forwarded-host": "stegosaur-hamstring-surface.ngrok-free.dev",
+            "x-forwarded-proto": "https",
+            "x-github-delivery": "b238bbc0-5870-11f1-8a7f-0ebe7048763f",
+            "x-github-event": "pull_request",
+            "x-github-hook-id": "630741095",
+            "x-github-hook-installation-target-id": "1047362297",
+            "x-github-hook-installation-target-type": "repository",
+            "accept-encoding": "gzip"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "action": "opened",
+            "number": 1,
+            "pull_request": {
+              "url": "https://api.github.com/repos/Roger1611/agribuddy/pulls/1",
+              "id": 3743838877,
+              "node_id": "PR_kwDOPm16-c7fJnKd",
+              "html_url": "https://github.com/Roger1611/agribuddy/pull/1",
+              "diff_url": "https://github.com/Roger1611/agribuddy/pull/1.diff",
+              "patch_url": "https://github.com/Roger1611/agribuddy/pull/1.patch",
+              "issue_url": "https://api.github.com/repos/Roger1611/agribuddy/issues/1",
+              "number": 1,
+              "state": "open",
+              "locked": false,
+              "title": "Add newline at end of user.py",
+              "user": {
+                "login": "Roger1611",
+                "id": 203692290,
+                "node_id": "U_kgDODCQZAg",
+                "avatar_url": "https://avatars.githubusercontent.com/u/203692290?v=4",
+                "gravatar_id": "",
+                "url": "https://api.github.com/users/Roger1611",
+                "html_url": "https://github.com/Roger1611",
+                "followers_url": "https://api.github.com/users/Roger1611/followers",
+                "following_url": "https://api.github.com/users/Roger1611/following{/other_user}",
+                "gists_url": "https://api.github.com/users/Roger1611/gists{/gist_id}",
+                "starred_url": "https://api.github.com/users/Roger1611/starred{/owner}{/repo}",
+                "subscriptions_url": "https://api.github.com/users/Roger1611/subscriptions",
+                "organizations_url": "https://api.github.com/users/Roger1611/orgs",
+                "repos_url": "https://api.github.com/users/Roger1611/repos",
+                "events_url": "https://api.github.com/users/Roger1611/events{/privacy}",
+                "received_events_url": "https://api.github.com/users/Roger1611/received_events",
+                "type": "User",
+                "user_view_type": "public",
+                "site_admin": false
+              },
+              "body": null,
+              "created_at": "2026-05-25T19:34:06Z",
+              "updated_at": "2026-05-25T19:34:06Z",
+              "closed_at": null,
+              "merged_at": null,
+              "merge_commit_sha": null,
+              "assignees": [],
+              "requested_reviewers": [],
+              "requested_teams": [],
+              "labels": [],
+              "milestone": null,
+              "draft": false,
+              "commits_url": "https://api.github.com/repos/Roger1611/agribuddy/pulls/1/commits",
+              "review_comments_url": "https://api.github.com/repos/Roger1611/agribuddy/pulls/1/comments",
+              "review_comment_url": "https://api.github.com/repos/Roger1611/agribuddy/pulls/comments{/number}",
+              "comments_url": "https://api.github.com/repos/Roger1611/agribuddy/issues/1/comments",
+              "statuses_url": "https://api.github.com/repos/Roger1611/agribuddy/statuses/75887ea399556830f93522897391df4cfa88f8d3",
+              "head": {
+                "label": "Roger1611:Roger1611-patch-1",
+                "ref": "Roger1611-patch-1",
+                "sha": "75887ea399556830f93522897391df4cfa88f8d3",
+                "user": {
+                  "login": "Roger1611",
+                  "id": 203692290,
+                  "node_id": "U_kgDODCQZAg",
+                  "avatar_url": "https://avatars.githubusercontent.com/u/203692290?v=4",
+                  "gravatar_id": "",
+                  "url": "https://api.github.com/users/Roger1611",
+                  "html_url": "https://github.com/Roger1611",
+                  "followers_url": "https://api.github.com/users/Roger1611/followers",
+                  "following_url": "https://api.github.com/users/Roger1611/following{/other_user}",
+                  "gists_url": "https://api.github.com/users/Roger1611/gists{/gist_id}",
+                  "starred_url": "https://api.github.com/users/Roger1611/starred{/owner}{/repo}",
+                  "subscriptions_url": "https://api.github.com/users/Roger1611/subscriptions",
+                  "organizations_url": "https://api.github.com/users/Roger1611/orgs",
+                  "repos_url": "https://api.github.com/users/Roger1611/repos",
+                  "events_url": "https://api.github.com/users/Roger1611/events{/privacy}",
+                  "received_events_url": "https://api.github.com/users/Roger1611/received_events",
+                  "type": "User",
+                  "user_view_type": "public",
+                  "site_admin": false
+                },
+                "repo": {
+                  "id": 1047362297,
+                  "node_id": "R_kgDOPm16-Q",
+                  "name": "agribuddy",
+                  "full_name": "Roger1611/agribuddy",
+                  "private": true,
+                  "owner": {
+                    "login": "Roger1611",
+                    "id": 203692290,
+                    "node_id": "U_kgDODCQZAg",
+                    "avatar_url": "https://avatars.githubusercontent.com/u/203692290?v=4",
+                    "gravatar_id": "",
+                    "url": "https://api.github.com/users/Roger1611",
+                    "html_url": "https://github.com/Roger1611",
+                    "followers_url": "https://api.github.com/users/Roger1611/followers",
+                    "following_url": "https://api.github.com/users/Roger1611/following{/other_user}",
+                    "gists_url": "https://api.github.com/users/Roger1611/gists{/gist_id}",
+                    "starred_url": "https://api.github.com/users/Roger1611/starred{/owner}{/repo}",
+                    "subscriptions_url": "https://api.github.com/users/Roger1611/subscriptions",
+                    "organizations_url": "https://api.github.com/users/Roger1611/orgs",
+                    "repos_url": "https://api.github.com/users/Roger1611/repos",
+                    "events_url": "https://api.github.com/users/Roger1611/events{/privacy}",
+                    "received_events_url": "https://api.github.com/users/Roger1611/received_events",
+                    "type": "User",
+                    "user_view_type": "public",
+                    "site_admin": false
+                  },
+                  "html_url": "https://github.com/Roger1611/agribuddy",
+                  "description": null,
+                  "fork": false,
+                  "url": "https://api.github.com/repos/Roger1611/agribuddy",
+                  "forks_url": "https://api.github.com/repos/Roger1611/agribuddy/forks",
+                  "keys_url": "https://api.github.com/repos/Roger1611/agribuddy/keys{/key_id}",
+                  "collaborators_url": "https://api.github.com/repos/Roger1611/agribuddy/collaborators{/collaborator}",
+                  "teams_url": "https://api.github.com/repos/Roger1611/agribuddy/teams",
+                  "hooks_url": "https://api.github.com/repos/Roger1611/agribuddy/hooks",
+                  "issue_events_url": "https://api.github.com/repos/Roger1611/agribuddy/issues/events{/number}",
+                  "events_url": "https://api.github.com/repos/Roger1611/agribuddy/events",
+                  "assignees_url": "https://api.github.com/repos/Roger1611/agribuddy/assignees{/user}",
+                  "branches_url": "https://api.github.com/repos/Roger1611/agribuddy/branches{/branch}",
+                  "tags_url": "https://api.github.com/repos/Roger1611/agribuddy/tags",
+                  "blobs_url": "https://api.github.com/repos/Roger1611/agribuddy/git/blobs{/sha}",
+                  "git_tags_url": "https://api.github.com/repos/Roger1611/agribuddy/git/tags{/sha}",
+                  "git_refs_url": "https://api.github.com/repos/Roger1611/agribuddy/git/refs{/sha}",
+                  "trees_url": "https://api.github.com/repos/Roger1611/agribuddy/git/trees{/sha}",
+                  "statuses_url": "https://api.github.com/repos/Roger1611/agribuddy/statuses/{sha}",
+                  "languages_url": "https://api.github.com/repos/Roger1611/agribuddy/languages",
+                  "stargazers_url": "https://api.github.com/repos/Roger1611/agribuddy/stargazers",
+                  "contributors_url": "https://api.github.com/repos/Roger1611/agribuddy/contributors",
+                  "subscribers_url": "https://api.github.com/repos/Roger1611/agribuddy/subscribers",
+                  "subscription_url": "https://api.github.com/repos/Roger1611/agribuddy/subscription",
+                  "commits_url": "https://api.github.com/repos/Roger1611/agribuddy/commits{/sha}",
+                  "git_commits_url": "https://api.github.com/repos/Roger1611/agribuddy/git/commits{/sha}",
+                  "comments_url": "https://api.github.com/repos/Roger1611/agribuddy/comments{/number}",
+                  "issue_comment_url": "https://api.github.com/repos/Roger1611/agribuddy/issues/comments{/number}",
+                  "contents_url": "https://api.github.com/repos/Roger1611/agribuddy/contents/{+path}",
+                  "compare_url": "https://api.github.com/repos/Roger1611/agribuddy/compare/{base}...{head}",
+                  "merges_url": "https://api.github.com/repos/Roger1611/agribuddy/merges",
+                  "archive_url": "https://api.github.com/repos/Roger1611/agribuddy/{archive_format}{/ref}",
+                  "downloads_url": "https://api.github.com/repos/Roger1611/agribuddy/downloads",
+                  "issues_url": "https://api.github.com/repos/Roger1611/agribuddy/issues{/number}",
+                  "pulls_url": "https://api.github.com/repos/Roger1611/agribuddy/pulls{/number}",
+                  "milestones_url": "https://api.github.com/repos/Roger1611/agribuddy/milestones{/number}",
+                  "notifications_url": "https://api.github.com/repos/Roger1611/agribuddy/notifications{?since,all,participating}",
+                  "labels_url": "https://api.github.com/repos/Roger1611/agribuddy/labels{/name}",
+                  "releases_url": "https://api.github.com/repos/Roger1611/agribuddy/releases{/id}",
+                  "deployments_url": "https://api.github.com/repos/Roger1611/agribuddy/deployments",
+                  "created_at": "2025-08-30T08:45:51Z",
+                  "updated_at": "2025-09-09T19:21:54Z",
+                  "pushed_at": "2026-05-25T19:33:22Z",
+                  "git_url": "git://github.com/Roger1611/agribuddy.git",
+                  "ssh_url": "git@github.com:Roger1611/agribuddy.git",
+                  "clone_url": "https://github.com/Roger1611/agribuddy.git",
+                  "svn_url": "https://github.com/Roger1611/agribuddy",
+                  "homepage": null,
+                  "size": 890,
+                  "stargazers_count": 0,
+                  "watchers_count": 0,
+                  "language": "Dart",
+                  "has_issues": true,
+                  "has_projects": true,
+                  "has_downloads": true,
+                  "has_wiki": false,
+                  "has_pages": false,
+                  "has_discussions": false,
+                  "forks_count": 0,
+                  "mirror_url": null,
+                  "archived": false,
+                  "disabled": false,
+                  "open_issues_count": 1,
+                  "license": null,
+                  "allow_forking": true,
+                  "is_template": false,
+                  "web_commit_signoff_required": false,
+                  "has_pull_requests": true,
+                  "pull_request_creation_policy": "all",
+                  "topics": [],
+                  "visibility": "private",
+                  "forks": 0,
+                  "open_issues": 1,
+                  "watchers": 0,
+                  "default_branch": "main",
+                  "allow_squash_merge": true,
+                  "allow_merge_commit": true,
+                  "allow_rebase_merge": true,
+                  "allow_auto_merge": false,
+                  "delete_branch_on_merge": false,
+                  "allow_update_branch": false,
+                  "use_squash_pr_title_as_default": false,
+                  "squash_merge_commit_message": "COMMIT_MESSAGES",
+                  "squash_merge_commit_title": "COMMIT_OR_PR_TITLE",
+                  "merge_commit_message": "PR_TITLE",
+                  "merge_commit_title": "MERGE_MESSAGE"
+                }
+              },
+              "base": {
+                "label": "Roger1611:main",
+                "ref": "main",
+                "sha": "f94ae6a41b73753192e9fbbf190d400abe6904de",
+                "user": {
+                  "login": "Roger1611",
+                  "id": 203692290,
+                  "node_id": "U_kgDODCQZAg",
+                  "avatar_url": "https://avatars.githubusercontent.com/u/203692290?v=4",
+                  "gravatar_id": "",
+                  "url": "https://api.github.com/users/Roger1611",
+                  "html_url": "https://github.com/Roger1611",
+                  "followers_url": "https://api.github.com/users/Roger1611/followers",
+                  "following_url": "https://api.github.com/users/Roger1611/following{/other_user}",
+                  "gists_url": "https://api.github.com/users/Roger1611/gists{/gist_id}",
+                  "starred_url": "https://api.github.com/users/Roger1611/starred{/owner}{/repo}",
+                  "subscriptions_url": "https://api.github.com/users/Roger1611/subscriptions",
+                  "organizations_url": "https://api.github.com/users/Roger1611/orgs",
+                  "repos_url": "https://api.github.com/users/Roger1611/repos",
+                  "events_url": "https://api.github.com/users/Roger1611/events{/privacy}",
+                  "received_events_url": "https://api.github.com/users/Roger1611/received_events",
+                  "type": "User",
+                  "user_view_type": "public",
+                  "site_admin": false
+                },
+                "repo": {
+                  "id": 1047362297,
+                  "node_id": "R_kgDOPm16-Q",
+                  "name": "agribuddy",
+                  "full_name": "Roger1611/agribuddy",
+                  "private": true,
+                  "owner": {
+                    "login": "Roger1611",
+                    "id": 203692290,
+                    "node_id": "U_kgDODCQZAg",
+                    "avatar_url": "https://avatars.githubusercontent.com/u/203692290?v=4",
+                    "gravatar_id": "",
+                    "url": "https://api.github.com/users/Roger1611",
+                    "html_url": "https://github.com/Roger1611",
+                    "followers_url": "https://api.github.com/users/Roger1611/followers",
+                    "following_url": "https://api.github.com/users/Roger1611/following{/other_user}",
+                    "gists_url": "https://api.github.com/users/Roger1611/gists{/gist_id}",
+                    "starred_url": "https://api.github.com/users/Roger1611/starred{/owner}{/repo}",
+                    "subscriptions_url": "https://api.github.com/users/Roger1611/subscriptions",
+                    "organizations_url": "https://api.github.com/users/Roger1611/orgs",
+                    "repos_url": "https://api.github.com/users/Roger1611/repos",
+                    "events_url": "https://api.github.com/users/Roger1611/events{/privacy}",
+                    "received_events_url": "https://api.github.com/users/Roger1611/received_events",
+                    "type": "User",
+                    "user_view_type": "public",
+                    "site_admin": false
+                  },
+                  "html_url": "https://github.com/Roger1611/agribuddy",
+                  "description": null,
+                  "fork": false,
+                  "url": "https://api.github.com/repos/Roger1611/agribuddy",
+                  "forks_url": "https://api.github.com/repos/Roger1611/agribuddy/forks",
+                  "keys_url": "https://api.github.com/repos/Roger1611/agribuddy/keys{/key_id}",
+                  "collaborators_url": "https://api.github.com/repos/Roger1611/agribuddy/collaborators{/collaborator}",
+                  "teams_url": "https://api.github.com/repos/Roger1611/agribuddy/teams",
+                  "hooks_url": "https://api.github.com/repos/Roger1611/agribuddy/hooks",
+                  "issue_events_url": "https://api.github.com/repos/Roger1611/agribuddy/issues/events{/number}",
+                  "events_url": "https://api.github.com/repos/Roger1611/agribuddy/events",
+                  "assignees_url": "https://api.github.com/repos/Roger1611/agribuddy/assignees{/user}",
+                  "branches_url": "https://api.github.com/repos/Roger1611/agribuddy/branches{/branch}",
+                  "tags_url": "https://api.github.com/repos/Roger1611/agribuddy/tags",
+                  "blobs_url": "https://api.github.com/repos/Roger1611/agribuddy/git/blobs{/sha}",
+                  "git_tags_url": "https://api.github.com/repos/Roger1611/agribuddy/git/tags{/sha}",
+                  "git_refs_url": "https://api.github.com/repos/Roger1611/agribuddy/git/refs{/sha}",
+                  "trees_url": "https://api.github.com/repos/Roger1611/agribuddy/git/trees{/sha}",
+                  "statuses_url": "https://api.github.com/repos/Roger1611/agribuddy/statuses/{sha}",
+                  "languages_url": "https://api.github.com/repos/Roger1611/agribuddy/languages",
+                  "stargazers_url": "https://api.github.com/repos/Roger1611/agribuddy/stargazers",
+                  "contributors_url": "https://api.github.com/repos/Roger1611/agribuddy/contributors",
+                  "subscribers_url": "https://api.github.com/repos/Roger1611/agribuddy/subscribers",
+                  "subscription_url": "https://api.github.com/repos/Roger1611/agribuddy/subscription",
+                  "commits_url": "https://api.github.com/repos/Roger1611/agribuddy/commits{/sha}",
+                  "git_commits_url": "https://api.github.com/repos/Roger1611/agribuddy/git/commits{/sha}",
+                  "comments_url": "https://api.github.com/repos/Roger1611/agribuddy/comments{/number}",
+                  "issue_comment_url": "https://api.github.com/repos/Roger1611/agribuddy/issues/comments{/number}",
+                  "contents_url": "https://api.github.com/repos/Roger1611/agribuddy/contents/{+path}",
+                  "compare_url": "https://api.github.com/repos/Roger1611/agribuddy/compare/{base}...{head}",
+                  "merges_url": "https://api.github.com/repos/Roger1611/agribuddy/merges",
+                  "archive_url": "https://api.github.com/repos/Roger1611/agribuddy/{archive_format}{/ref}",
+                  "downloads_url": "https://api.github.com/repos/Roger1611/agribuddy/downloads",
+                  "issues_url": "https://api.github.com/repos/Roger1611/agribuddy/issues{/number}",
+                  "pulls_url": "https://api.github.com/repos/Roger1611/agribuddy/pulls{/number}",
+                  "milestones_url": "https://api.github.com/repos/Roger1611/agribuddy/milestones{/number}",
+                  "notifications_url": "https://api.github.com/repos/Roger1611/agribuddy/notifications{?since,all,participating}",
+                  "labels_url": "https://api.github.com/repos/Roger1611/agribuddy/labels{/name}",
+                  "releases_url": "https://api.github.com/repos/Roger1611/agribuddy/releases{/id}",
+                  "deployments_url": "https://api.github.com/repos/Roger1611/agribuddy/deployments",
+                  "created_at": "2025-08-30T08:45:51Z",
+                  "updated_at": "2025-09-09T19:21:54Z",
+                  "pushed_at": "2026-05-25T19:33:22Z",
+                  "git_url": "git://github.com/Roger1611/agribuddy.git",
+                  "ssh_url": "git@github.com:Roger1611/agribuddy.git",
+                  "clone_url": "https://github.com/Roger1611/agribuddy.git",
+                  "svn_url": "https://github.com/Roger1611/agribuddy",
+                  "homepage": null,
+                  "size": 890,
+                  "stargazers_count": 0,
+                  "watchers_count": 0,
+                  "language": "Dart",
+                  "has_issues": true,
+                  "has_projects": true,
+                  "has_downloads": true,
+                  "has_wiki": false,
+                  "has_pages": false,
+                  "has_discussions": false,
+                  "forks_count": 0,
+                  "mirror_url": null,
+                  "archived": false,
+                  "disabled": false,
+                  "open_issues_count": 1,
+                  "license": null,
+                  "allow_forking": true,
+                  "is_template": false,
+                  "web_commit_signoff_required": false,
+                  "has_pull_requests": true,
+                  "pull_request_creation_policy": "all",
+                  "topics": [],
+                  "visibility": "private",
+                  "forks": 0,
+                  "open_issues": 1,
+                  "watchers": 0,
+                  "default_branch": "main",
+                  "allow_squash_merge": true,
+                  "allow_merge_commit": true,
+                  "allow_rebase_merge": true,
+                  "allow_auto_merge": false,
+                  "delete_branch_on_merge": false,
+                  "allow_update_branch": false,
+                  "use_squash_pr_title_as_default": false,
+                  "squash_merge_commit_message": "COMMIT_MESSAGES",
+                  "squash_merge_commit_title": "COMMIT_OR_PR_TITLE",
+                  "merge_commit_message": "PR_TITLE",
+                  "merge_commit_title": "MERGE_MESSAGE"
+                }
+              },
+              "_links": {
+                "self": {
+                  "href": "https://api.github.com/repos/Roger1611/agribuddy/pulls/1"
+                },
+                "html": {
+                  "href": "https://github.com/Roger1611/agribuddy/pull/1"
+                },
+                "issue": {
+                  "href": "https://api.github.com/repos/Roger1611/agribuddy/issues/1"
+                },
+                "comments": {
+                  "href": "https://api.github.com/repos/Roger1611/agribuddy/issues/1/comments"
+                },
+                "review_comments": {
+                  "href": "https://api.github.com/repos/Roger1611/agribuddy/pulls/1/comments"
+                },
+                "review_comment": {
+                  "href": "https://api.github.com/repos/Roger1611/agribuddy/pulls/comments{/number}"
+                },
+                "commits": {
+                  "href": "https://api.github.com/repos/Roger1611/agribuddy/pulls/1/commits"
+                },
+                "statuses": {
+                  "href": "https://api.github.com/repos/Roger1611/agribuddy/statuses/75887ea399556830f93522897391df4cfa88f8d3"
+                }
+              },
+              "author_association": "OWNER",
+              "auto_merge": null,
+              "assignee": null,
+              "active_lock_reason": null,
+              "merged": false,
+              "mergeable": null,
+              "rebaseable": null,
+              "mergeable_state": "unknown",
+              "merged_by": null,
+              "comments": 0,
+              "review_comments": 0,
+              "maintainer_can_modify": false,
+              "commits": 1,
+              "additions": 1,
+              "deletions": 0,
+              "changed_files": 1
+            },
+            "repository": {
+              "id": 1047362297,
+              "node_id": "R_kgDOPm16-Q",
+              "name": "agribuddy",
+              "full_name": "Roger1611/agribuddy",
+              "private": true,
+              "owner": {
+                "login": "Roger1611",
+                "id": 203692290,
+                "node_id": "U_kgDODCQZAg",
+                "avatar_url": "https://avatars.githubusercontent.com/u/203692290?v=4",
+                "gravatar_id": "",
+                "url": "https://api.github.com/users/Roger1611",
+                "html_url": "https://github.com/Roger1611",
+                "followers_url": "https://api.github.com/users/Roger1611/followers",
+                "following_url": "https://api.github.com/users/Roger1611/following{/other_user}",
+                "gists_url": "https://api.github.com/users/Roger1611/gists{/gist_id}",
+                "starred_url": "https://api.github.com/users/Roger1611/starred{/owner}{/repo}",
+                "subscriptions_url": "https://api.github.com/users/Roger1611/subscriptions",
+                "organizations_url": "https://api.github.com/users/Roger1611/orgs",
+                "repos_url": "https://api.github.com/users/Roger1611/repos",
+                "events_url": "https://api.github.com/users/Roger1611/events{/privacy}",
+                "received_events_url": "https://api.github.com/users/Roger1611/received_events",
+                "type": "User",
+                "user_view_type": "public",
+                "site_admin": false
+              },
+              "html_url": "https://github.com/Roger1611/agribuddy",
+              "description": null,
+              "fork": false,
+              "url": "https://api.github.com/repos/Roger1611/agribuddy",
+              "forks_url": "https://api.github.com/repos/Roger1611/agribuddy/forks",
+              "keys_url": "https://api.github.com/repos/Roger1611/agribuddy/keys{/key_id}",
+              "collaborators_url": "https://api.github.com/repos/Roger1611/agribuddy/collaborators{/collaborator}",
+              "teams_url": "https://api.github.com/repos/Roger1611/agribuddy/teams",
+              "hooks_url": "https://api.github.com/repos/Roger1611/agribuddy/hooks",
+              "issue_events_url": "https://api.github.com/repos/Roger1611/agribuddy/issues/events{/number}",
+              "events_url": "https://api.github.com/repos/Roger1611/agribuddy/events",
+              "assignees_url": "https://api.github.com/repos/Roger1611/agribuddy/assignees{/user}",
+              "branches_url": "https://api.github.com/repos/Roger1611/agribuddy/branches{/branch}",
+              "tags_url": "https://api.github.com/repos/Roger1611/agribuddy/tags",
+              "blobs_url": "https://api.github.com/repos/Roger1611/agribuddy/git/blobs{/sha}",
+              "git_tags_url": "https://api.github.com/repos/Roger1611/agribuddy/git/tags{/sha}",
+              "git_refs_url": "https://api.github.com/repos/Roger1611/agribuddy/git/refs{/sha}",
+              "trees_url": "https://api.github.com/repos/Roger1611/agribuddy/git/trees{/sha}",
+              "statuses_url": "https://api.github.com/repos/Roger1611/agribuddy/statuses/{sha}",
+              "languages_url": "https://api.github.com/repos/Roger1611/agribuddy/languages",
+              "stargazers_url": "https://api.github.com/repos/Roger1611/agribuddy/stargazers",
+              "contributors_url": "https://api.github.com/repos/Roger1611/agribuddy/contributors",
+              "subscribers_url": "https://api.github.com/repos/Roger1611/agribuddy/subscribers",
+              "subscription_url": "https://api.github.com/repos/Roger1611/agribuddy/subscription",
+              "commits_url": "https://api.github.com/repos/Roger1611/agribuddy/commits{/sha}",
+              "git_commits_url": "https://api.github.com/repos/Roger1611/agribuddy/git/commits{/sha}",
+              "comments_url": "https://api.github.com/repos/Roger1611/agribuddy/comments{/number}",
+              "issue_comment_url": "https://api.github.com/repos/Roger1611/agribuddy/issues/comments{/number}",
+              "contents_url": "https://api.github.com/repos/Roger1611/agribuddy/contents/{+path}",
+              "compare_url": "https://api.github.com/repos/Roger1611/agribuddy/compare/{base}...{head}",
+              "merges_url": "https://api.github.com/repos/Roger1611/agribuddy/merges",
+              "archive_url": "https://api.github.com/repos/Roger1611/agribuddy/{archive_format}{/ref}",
+              "downloads_url": "https://api.github.com/repos/Roger1611/agribuddy/downloads",
+              "issues_url": "https://api.github.com/repos/Roger1611/agribuddy/issues{/number}",
+              "pulls_url": "https://api.github.com/repos/Roger1611/agribuddy/pulls{/number}",
+              "milestones_url": "https://api.github.com/repos/Roger1611/agribuddy/milestones{/number}",
+              "notifications_url": "https://api.github.com/repos/Roger1611/agribuddy/notifications{?since,all,participating}",
+              "labels_url": "https://api.github.com/repos/Roger1611/agribuddy/labels{/name}",
+              "releases_url": "https://api.github.com/repos/Roger1611/agribuddy/releases{/id}",
+              "deployments_url": "https://api.github.com/repos/Roger1611/agribuddy/deployments",
+              "created_at": "2025-08-30T08:45:51Z",
+              "updated_at": "2025-09-09T19:21:54Z",
+              "pushed_at": "2026-05-25T19:33:22Z",
+              "git_url": "git://github.com/Roger1611/agribuddy.git",
+              "ssh_url": "git@github.com:Roger1611/agribuddy.git",
+              "clone_url": "https://github.com/Roger1611/agribuddy.git",
+              "svn_url": "https://github.com/Roger1611/agribuddy",
+              "homepage": null,
+              "size": 890,
+              "stargazers_count": 0,
+              "watchers_count": 0,
+              "language": "Dart",
+              "has_issues": true,
+              "has_projects": true,
+              "has_downloads": true,
+              "has_wiki": false,
+              "has_pages": false,
+              "has_discussions": false,
+              "forks_count": 0,
+              "mirror_url": null,
+              "archived": false,
+              "disabled": false,
+              "open_issues_count": 1,
+              "license": null,
+              "allow_forking": true,
+              "is_template": false,
+              "web_commit_signoff_required": false,
+              "has_pull_requests": true,
+              "pull_request_creation_policy": "all",
+              "topics": [],
+              "visibility": "private",
+              "forks": 0,
+              "open_issues": 1,
+              "watchers": 0,
+              "default_branch": "main"
+            },
+            "sender": {
+              "login": "Roger1611",
+              "id": 203692290,
+              "node_id": "U_kgDODCQZAg",
+              "avatar_url": "https://avatars.githubusercontent.com/u/203692290?v=4",
+              "gravatar_id": "",
+              "url": "https://api.github.com/users/Roger1611",
+              "html_url": "https://github.com/Roger1611",
+              "followers_url": "https://api.github.com/users/Roger1611/followers",
+              "following_url": "https://api.github.com/users/Roger1611/following{/other_user}",
+              "gists_url": "https://api.github.com/users/Roger1611/gists{/gist_id}",
+              "starred_url": "https://api.github.com/users/Roger1611/starred{/owner}{/repo}",
+              "subscriptions_url": "https://api.github.com/users/Roger1611/subscriptions",
+              "organizations_url": "https://api.github.com/users/Roger1611/orgs",
+              "repos_url": "https://api.github.com/users/Roger1611/repos",
+              "events_url": "https://api.github.com/users/Roger1611/events{/privacy}",
+              "received_events_url": "https://api.github.com/users/Roger1611/received_events",
+              "type": "User",
+              "user_view_type": "public",
+              "site_admin": false
+            }
+          },
+          "webhookUrl": "http://localhost:5678/webhook/github-pr-review",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract PR Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PR Data": {
+      "main": [
+        [
+          {
+            "node": "Fetch PR Diff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch PR Diff": {
+      "main": [
+        [
+          {
+            "node": "DeepSeek AI Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek AI Review": {
+      "main": [
+        [
+          {
+            "node": "Format Review Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Review Output": {
+      "main": [
+        [
+          {
+            "node": "Build Review Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "c3540564-b0d6-4ba9-9968-d57d364635de",
+  "meta": {
+    "instanceId": "1b4093ca68aec4e5152195a77f9fdda446bf6b419798c3ae475293342a0405f7"
+  },
+  "id": "92mc4rcbVhZhL5Uz",
+  "tags": []
+}
