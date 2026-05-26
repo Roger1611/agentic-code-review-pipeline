@@ -35,4 +35,4 @@ GitHub PR Opened → Webhook → Extract PR Data → Fetch PR Diff → DeepSeek 
 
 ## Demo
 
-The pipeline catches real issues — on a test PR it flagged a misleading title, identified a commented-out line of code, and returned 4 structured categories of feedback.
+The pipeline catches real issues - on a test PR it flagged a misleading title, identified a commented-out line of code, and returned 4 structured categories of feedback.
