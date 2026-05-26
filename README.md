@@ -21,17 +21,17 @@ GitHub PR Opened → Webhook → Extract PR Data → Fetch PR Diff → DeepSeek 
 
 ## Tech Stack
 
-- **n8n** — workflow orchestration
-- **DeepSeek** (via OpenRouter) — AI code review
-- **GitHub Webhooks** — event trigger
-- **ngrok** — local webhook tunnel (for development)
+- **n8n** : workflow orchestration
+- **DeepSeek** (via OpenRouter) : AI code review
+- **GitHub Webhooks** : event trigger
+- **ngrok** : local webhook tunnel (for development)
 
 ## Setup
 
 1. Import `workflow.json` into your n8n instance
 2. Add your OpenRouter API key in the DeepSeek AI Review node
 3. Set up a GitHub webhook pointing to your n8n webhook URL
-4. Open a PR — the pipeline runs automatically
+4. Open a PR - the pipeline runs automatically
 
 ## Demo
 
